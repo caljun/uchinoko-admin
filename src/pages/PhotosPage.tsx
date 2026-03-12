@@ -118,36 +118,38 @@ export default function PhotosPage() {
 
       {/* 詳細モーダル */}
       {selected && (
-        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4" onClick={() => setSelected(null)}>
-          <div className="bg-white rounded-2xl overflow-hidden max-w-lg w-full shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <img src={selected.url} alt="" className="w-full aspect-square object-cover" />
-            <div className="p-4">
-              <div className="text-xs text-gray-400 mb-1 font-mono">
-                {selected.ownerUid.slice(0, 8)}... / {selected.dogId.slice(0, 8)}...
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setSelected(null)}>
+          <div className="bg-white rounded-2xl overflow-hidden max-w-xl w-full shadow-2xl flex" onClick={(e) => e.stopPropagation()}>
+            <img src={selected.url} alt="" className="w-48 h-48 object-cover flex-shrink-0" />
+            <div className="flex-1 p-5 flex flex-col justify-between min-w-0">
+              <div>
+                <div className="text-xs text-gray-400 font-mono mb-1 truncate">
+                  {selected.ownerUid.slice(0, 10)}... / {selected.dogId.slice(0, 10)}...
+                </div>
+                {selected.createdAt && (
+                  <p className="text-xs text-gray-400 mb-2">
+                    {selected.createdAt.toDate().toLocaleDateString('ja-JP')}
+                  </p>
+                )}
+                {selected.comment && (
+                  <p className="text-sm text-gray-700 leading-relaxed line-clamp-3">{selected.comment}</p>
+                )}
               </div>
-              {selected.createdAt && (
-                <p className="text-xs text-gray-400 mb-2">
-                  {selected.createdAt.toDate().toLocaleDateString('ja-JP')}
-                </p>
-              )}
-              {selected.comment && (
-                <p className="text-sm text-gray-700 mb-4">{selected.comment}</p>
-              )}
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2 mt-4">
                 <button
                   onClick={() => deletePhoto(selected)}
                   disabled={!!actionLoading}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 border border-red-200 text-red-500 rounded-xl text-sm hover:bg-red-50 disabled:opacity-40 transition-colors"
+                  className="flex items-center justify-center gap-2 py-2 border border-red-200 text-red-500 rounded-xl text-sm hover:bg-red-50 disabled:opacity-40 transition-colors"
                 >
-                  <Trash2 size={14} />
+                  <Trash2 size={13} />
                   この写真を削除
                 </button>
                 <button
                   onClick={() => deleteDiary(selected)}
                   disabled={!!actionLoading}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 bg-red-500 text-white rounded-xl text-sm hover:bg-red-600 disabled:opacity-40 transition-colors"
+                  className="flex items-center justify-center gap-2 py-2 bg-red-500 text-white rounded-xl text-sm hover:bg-red-600 disabled:opacity-40 transition-colors"
                 >
-                  <FileX size={14} />
+                  <FileX size={13} />
                   投稿ごと削除
                 </button>
               </div>
