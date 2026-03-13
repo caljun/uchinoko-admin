@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { collectionGroup, getDocs, orderBy, query, doc, updateDoc, arrayRemove, deleteDoc, collection } from 'firebase/firestore'
+import { collectionGroup, getDocs, orderBy, query, doc, deleteDoc, collection } from 'firebase/firestore'
 import { db } from '../lib/firebase'
-import { Trash2, FileX, RefreshCw, User, X } from 'lucide-react'
+import { Trash2, RefreshCw, User, X } from 'lucide-react'
 
 interface DiaryPhoto {
   url: string
@@ -11,7 +11,6 @@ interface DiaryPhoto {
   dogId: string
   ownerName?: string
   comment?: string
-  photos: string[]
   createdAt?: { toDate: () => Date }
 }
 
@@ -54,7 +53,6 @@ export default function PhotosPage() {
           dogId,
           ownerName: ownerMap[ownerUid],
           comment: data.comment,
-          photos: photoUrls,
           createdAt: data.createdAt,
         })
       })
@@ -65,24 +63,7 @@ export default function PhotosPage() {
 
   const deletePhoto = async (photo: DiaryPhoto) => {
     if (!confirm('この写真を削除しますか？')) return
-    setActionLoading(photo.url)
-    try {
-      const ref = doc(db, photo.diaryRef)
-      if (photo.photos.length === 1) {
-        await deleteDoc(ref)
-      } else {
-        await updateDoc(ref, { photos: arrayRemove(photo.url) })
-      }
-      setPhotos((prev) => prev.filter((p) => p.url !== photo.url))
-      if (selected?.url === photo.url) setSelected(null)
-    } finally {
-      setActionLoading(null)
-    }
-  }
-
-  const deleteDiary = async (photo: DiaryPhoto) => {
-    if (!confirm('この投稿全体（写真をすべて）削除しますか？')) return
-    setActionLoading(`diary_${photo.diaryId}`)
+    setActionLoading(photo.diaryId)
     try {
       await deleteDoc(doc(db, photo.diaryRef))
       setPhotos((prev) => prev.filter((p) => p.diaryId !== photo.diaryId))
@@ -192,27 +173,15 @@ export default function PhotosPage() {
               {selected.comment && (
                 <p className="text-sm text-gray-700 leading-relaxed bg-gray-50 rounded-lg px-3 py-2 mb-4 line-clamp-3">{selected.comment}</p>
               )}
-              {/* 同じ投稿の写真枚数 */}
-              {selected.photos.length > 1 && (
-                <p className="text-xs text-gray-400 mb-4">この投稿に {selected.photos.length} 枚の写真があります</p>
-              )}
               {/* アクション */}
               <div className="flex gap-2">
                 <button
                   onClick={() => deletePhoto(selected)}
                   disabled={!!actionLoading}
-                  className="flex-1 flex items-center justify-center gap-1.5 py-2.5 border border-red-200 text-red-500 rounded-xl text-sm hover:bg-red-50 disabled:opacity-40 transition-colors"
-                >
-                  <Trash2 size={13} />
-                  この写真を削除
-                </button>
-                <button
-                  onClick={() => deleteDiary(selected)}
-                  disabled={!!actionLoading}
                   className="flex-1 flex items-center justify-center gap-1.5 py-2.5 bg-red-500 text-white rounded-xl text-sm hover:bg-red-600 disabled:opacity-40 transition-colors"
                 >
-                  <FileX size={13} />
-                  投稿ごと削除
+                  <Trash2 size={13} />
+                  削除
                 </button>
               </div>
             </div>
