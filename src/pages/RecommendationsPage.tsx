@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { collection, getDocs, orderBy, query, doc, setDoc, addDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore'
+import { collection, getDocs, orderBy, query, doc, addDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import { Plus, Pencil, Trash2, ExternalLink, TrendingUp, Eye, EyeOff } from 'lucide-react'
 
@@ -30,9 +30,13 @@ interface Recommendation {
   tapCount?: number
   isActive: boolean
   order?: number
+  targetAgeGroups?: number[] | null
+  targetSizes?: number[] | null
 }
 
 const CATEGORIES = ['フード', 'おもちゃ', '健康・医療', 'グルーミング', 'お散歩', 'その他']
+const AGE_OPTIONS = [{ v: 0, label: 'パピー' }, { v: 1, label: '成犬' }, { v: 2, label: 'シニア' }]
+const SIZE_OPTIONS = [{ v: 0, label: '小型犬' }, { v: 1, label: '中型犬' }, { v: 2, label: '大型犬' }]
 
 function Modal({
   item,
@@ -51,8 +55,18 @@ function Modal({
     category: item?.category ?? '',
     isActive: item?.isActive ?? true,
     order: item?.order ?? 0,
+    targetAgeGroups: item?.targetAgeGroups ?? null as number[] | null,
+    targetSizes: item?.targetSizes ?? null as number[] | null,
   })
   const [saving, setSaving] = useState(false)
+
+  const toggleNum = (field: 'targetAgeGroups' | 'targetSizes', v: number) => {
+    setForm((f) => {
+      const cur = f[field] ?? []
+      const next = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v].sort()
+      return { ...f, [field]: next.length > 0 ? next : null }
+    })
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -126,6 +140,46 @@ function Modal({
                 onChange={(e) => setForm((f) => ({ ...f, order: Number(e.target.value) }))}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-300"
               />
+            </div>
+          </div>
+          {/* 対象年齢 */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">対象年齢 <span className="text-gray-400 font-normal">（未選択=全年齢）</span></label>
+            <div className="flex gap-2">
+              {AGE_OPTIONS.map(({ v, label }) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => toggleNum('targetAgeGroups', v)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                    (form.targetAgeGroups ?? []).includes(v)
+                      ? 'bg-blue-500 text-white border-blue-500'
+                      : 'bg-white text-gray-500 border-gray-200 hover:border-blue-300'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          </div>
+          {/* 対象サイズ */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">対象サイズ <span className="text-gray-400 font-normal">（未選択=全サイズ）</span></label>
+            <div className="flex gap-2">
+              {SIZE_OPTIONS.map(({ v, label }) => (
+                <button
+                  key={v}
+                  type="button"
+                  onClick={() => toggleNum('targetSizes', v)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                    (form.targetSizes ?? []).includes(v)
+                      ? 'bg-green-500 text-white border-green-500'
+                      : 'bg-white text-gray-500 border-gray-200 hover:border-green-300'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
           <div className="flex items-center gap-2">
