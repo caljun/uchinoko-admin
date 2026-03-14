@@ -141,6 +141,7 @@ export default function UsersPage() {
       const dogsMapTmp: Record<string, DogSummary[]> = {}
 
       dogsSnap.forEach((d) => {
+        if (!d.ref.path.startsWith('owners/')) return
         const ownerUid = d.ref.path.split('/')[1]
         const data = d.data()
         const total = (data.totalPoints as number) ?? 0
