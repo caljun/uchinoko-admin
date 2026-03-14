@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { collection, getDocs, orderBy, query } from 'firebase/firestore'
+import { collection, collectionGroup, getDocs, orderBy, query } from 'firebase/firestore'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { db } from '../lib/firebase'
 import { Search, Ban, Trash2, CheckCircle, AlertTriangle } from 'lucide-react'
@@ -67,12 +67,27 @@ export default function UsersPage() {
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
 
   useEffect(() => {
-    getDocs(query(collection(db, 'owners'), orderBy('createdAt', 'desc')))
-      .then((snap) => {
-        setOwners(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Owner)))
-        setLoading(false)
+    Promise.all([
+      getDocs(query(collection(db, 'owners'), orderBy('createdAt', 'desc'))),
+      getDocs(collectionGroup(db, 'dogs')),
+    ]).then(([ownersSnap, dogsSnap]) => {
+      // 犬ドキュメントからオーナーUID別にポイントを合算
+      const pointsMap: Record<string, { total: number; weekly: number }> = {}
+      dogsSnap.forEach((d) => {
+        const ownerUid = d.ref.path.split('/')[1]
+        const data = d.data()
+        if (!pointsMap[ownerUid]) pointsMap[ownerUid] = { total: 0, weekly: 0 }
+        pointsMap[ownerUid].total += (data.totalPoints as number) ?? 0
+        pointsMap[ownerUid].weekly += (data.weeklyPoints as number) ?? 0
       })
-      .catch(() => setLoading(false))
+      setOwners(ownersSnap.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
+        totalPoints: pointsMap[d.id]?.total ?? 0,
+        weeklyPoints: pointsMap[d.id]?.weekly ?? 0,
+      } as Owner)))
+      setLoading(false)
+    }).catch(() => setLoading(false))
   }, [])
 
   const showToast = (msg: string, type: 'ok' | 'err') => {
