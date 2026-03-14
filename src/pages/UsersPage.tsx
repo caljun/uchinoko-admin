@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { collection, collectionGroup, getDocs, orderBy, query } from 'firebase/firestore'
 import { getFunctions, httpsCallable } from 'firebase/functions'
 import { db } from '../lib/firebase'
-import { Search, Ban, Trash2, CheckCircle, AlertTriangle } from 'lucide-react'
+import { Search, Ban, Trash2, CheckCircle, AlertTriangle, X, PawPrint } from 'lucide-react'
 
 interface Owner {
   id: string
@@ -15,12 +15,21 @@ interface Owner {
   createdAt?: { toDate: () => Date }
 }
 
+interface DogSummary {
+  id: string
+  name: string
+  breed: string
+  gender: string
+  photoUrl?: string
+  totalPoints: number
+  weeklyPoints: number
+}
+
 const functions = getFunctions(undefined, 'us-central1')
 const callDisable = httpsCallable(functions, 'adminDisableUser')
 const callEnable = httpsCallable(functions, 'adminEnableUser')
 const callDelete = httpsCallable(functions, 'adminDeleteUser')
 
-// 削除確認モーダル
 function DeleteModal({ owner, onConfirm, onCancel }: {
   owner: Owner
   onConfirm: () => void
@@ -58,12 +67,69 @@ function DeleteModal({ owner, onConfirm, onCancel }: {
   )
 }
 
+function DogsModal({ owner, dogs, onClose }: {
+  owner: Owner
+  dogs: DogSummary[]
+  onClose: () => void
+}) {
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
+        {/* ヘッダー */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <h3 className="font-bold text-gray-800">{owner.displayName ?? '名前なし'}</h3>
+            <p className="text-xs text-gray-400 mt-0.5">{dogs.length}頭登録</p>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors">
+            <X size={14} className="text-gray-500" />
+          </button>
+        </div>
+        {/* 犬一覧 */}
+        <div className="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
+          {dogs.length === 0 ? (
+            <div className="text-center py-10 text-gray-400 text-sm">
+              <PawPrint size={28} className="mx-auto mb-2 opacity-30" />
+              登録された犬がいません
+            </div>
+          ) : (
+            dogs.map((dog) => (
+              <div key={dog.id} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
+                {/* 写真 */}
+                <div className="w-14 h-14 rounded-xl overflow-hidden bg-orange-100 flex-shrink-0 flex items-center justify-center">
+                  {dog.photoUrl ? (
+                    <img src={dog.photoUrl} alt={dog.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <PawPrint size={20} className="text-orange-300" />
+                  )}
+                </div>
+                {/* 情報 */}
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-gray-800 text-sm">{dog.name}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{dog.breed} · {dog.gender === 'male' ? '♂' : '♀'}</p>
+                </div>
+                {/* ポイント */}
+                <div className="text-right flex-shrink-0">
+                  <p className="text-sm font-bold text-orange-500">{dog.totalPoints.toLocaleString()} pt</p>
+                  <p className="text-xs text-gray-400">週 {dog.weeklyPoints.toLocaleString()}</p>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function UsersPage() {
   const [owners, setOwners] = useState<Owner[]>([])
+  const [dogsMap, setDogsMap] = useState<Record<string, DogSummary[]>>({})
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Owner | null>(null)
+  const [dogsTarget, setDogsTarget] = useState<Owner | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
 
   useEffect(() => {
@@ -71,15 +137,32 @@ export default function UsersPage() {
       getDocs(query(collection(db, 'owners'), orderBy('createdAt', 'desc'))),
       getDocs(collectionGroup(db, 'dogs')),
     ]).then(([ownersSnap, dogsSnap]) => {
-      // 犬ドキュメントからオーナーUID別にポイントを合算
       const pointsMap: Record<string, { total: number; weekly: number }> = {}
+      const dogsMapTmp: Record<string, DogSummary[]> = {}
+
       dogsSnap.forEach((d) => {
         const ownerUid = d.ref.path.split('/')[1]
         const data = d.data()
+        const total = (data.totalPoints as number) ?? 0
+        const weekly = (data.weeklyPoints as number) ?? 0
+
         if (!pointsMap[ownerUid]) pointsMap[ownerUid] = { total: 0, weekly: 0 }
-        pointsMap[ownerUid].total += (data.totalPoints as number) ?? 0
-        pointsMap[ownerUid].weekly += (data.weeklyPoints as number) ?? 0
+        pointsMap[ownerUid].total += total
+        pointsMap[ownerUid].weekly += weekly
+
+        if (!dogsMapTmp[ownerUid]) dogsMapTmp[ownerUid] = []
+        dogsMapTmp[ownerUid].push({
+          id: d.id,
+          name: data.name ?? '名前なし',
+          breed: data.breed ?? '不明',
+          gender: data.gender ?? 'male',
+          photoUrl: data.photoUrl,
+          totalPoints: total,
+          weeklyPoints: weekly,
+        })
       })
+
+      setDogsMap(dogsMapTmp)
       setOwners(ownersSnap.docs.map((d) => ({
         id: d.id,
         ...d.data(),
@@ -107,7 +190,7 @@ export default function UsersPage() {
         setOwners((prev) => prev.map((o) => o.id === owner.id ? { ...o, isDisabled: true } : o))
         showToast('アカウントを凍結しました', 'ok')
       }
-    } catch (e) {
+    } catch {
       showToast('エラーが発生しました', 'err')
     } finally {
       setActionLoading(null)
@@ -123,7 +206,7 @@ export default function UsersPage() {
       await callDelete({ uid: target.id })
       setOwners((prev) => prev.filter((o) => o.id !== target.id))
       showToast('ユーザーを削除しました', 'ok')
-    } catch (e) {
+    } catch {
       showToast('削除に失敗しました', 'err')
     } finally {
       setActionLoading(null)
@@ -199,11 +282,26 @@ export default function UsersPage() {
               {filtered.map((owner) => {
                 const date = owner.createdAt?.toDate()
                 const isActing = actionLoading === owner.id
+                const dogCount = dogsMap[owner.id]?.length ?? 0
                 return (
                   <tr key={owner.id} className={`${owner.isDisabled ? 'bg-red-50/40' : 'hover:bg-gray-50/50'} transition-colors`}>
                     <td className="px-4 py-3">
-                      <p className="font-medium text-gray-800 text-sm">{owner.displayName ?? '—'}</p>
-                      <p className="text-xs text-gray-400">{owner.email}</p>
+                      <button
+                        onClick={() => setDogsTarget(owner)}
+                        className="text-left hover:text-orange-600 transition-colors group"
+                      >
+                        <p className="font-medium text-gray-800 text-sm group-hover:text-orange-600">{owner.displayName ?? '—'}</p>
+                        <p className="text-xs text-gray-400">{owner.email}</p>
+                      </button>
+                      {dogCount > 0 && (
+                        <button
+                          onClick={() => setDogsTarget(owner)}
+                          className="flex items-center gap-1 mt-1 text-[10px] text-orange-400 hover:text-orange-600 transition-colors"
+                        >
+                          <PawPrint size={9} />
+                          {dogCount}頭
+                        </button>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-gray-500 font-mono text-xs">{owner.friendId ?? '—'}</td>
                     <td className="px-4 py-3 text-right font-semibold text-orange-500 text-sm">{owner.totalPoints ?? 0}</td>
@@ -226,7 +324,6 @@ export default function UsersPage() {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2 justify-end">
-                        {/* 凍結 / 解除 */}
                         <button
                           onClick={() => toggleDisable(owner)}
                           disabled={isActing}
@@ -245,7 +342,6 @@ export default function UsersPage() {
                           )}
                           {owner.isDisabled ? '解除' : '凍結'}
                         </button>
-                        {/* 削除 */}
                         <button
                           onClick={() => setDeleteTarget(owner)}
                           disabled={isActing}
@@ -267,6 +363,15 @@ export default function UsersPage() {
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* 犬一覧モーダル */}
+      {dogsTarget && (
+        <DogsModal
+          owner={dogsTarget}
+          dogs={dogsMap[dogsTarget.id] ?? []}
+          onClose={() => setDogsTarget(null)}
+        />
       )}
 
       {/* 削除確認モーダル */}
