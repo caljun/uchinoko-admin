@@ -32,11 +32,17 @@ interface Recommendation {
   order?: number
   targetAgeGroups?: number[] | null
   targetSizes?: number[] | null
+  targetPetType?: 'dog' | 'cat' | null
 }
 
-const CATEGORIES = ['フード', 'おもちゃ', '健康・医療', 'グルーミング', 'お散歩', 'その他']
-const AGE_OPTIONS = [{ v: 0, label: 'パピー' }, { v: 1, label: '成犬' }, { v: 2, label: 'シニア' }]
+const CATEGORIES = ['フード', 'おもちゃ', '健康・医療', 'グルーミング', 'お散歩', 'その他', 'キャットフード', '猫グッズ', '猫グルーミング']
+const AGE_OPTIONS = [{ v: 0, label: 'パピー/子猫' }, { v: 1, label: '成犬/成猫' }, { v: 2, label: 'シニア' }]
 const SIZE_OPTIONS = [{ v: 0, label: '小型犬' }, { v: 1, label: '中型犬' }, { v: 2, label: '大型犬' }]
+const PET_TYPE_OPTIONS = [
+  { v: null, label: '両方', color: 'bg-gray-500' },
+  { v: 'dog', label: '犬のみ 🐶', color: 'bg-orange-500' },
+  { v: 'cat', label: '猫のみ 🐱', color: 'bg-purple-500' },
+] as const
 
 function Modal({
   item,
@@ -57,6 +63,7 @@ function Modal({
     order: item?.order ?? 0,
     targetAgeGroups: item?.targetAgeGroups ?? null as number[] | null,
     targetSizes: item?.targetSizes ?? null as number[] | null,
+    targetPetType: item?.targetPetType ?? null as 'dog' | 'cat' | null,
   })
   const [saving, setSaving] = useState(false)
 
@@ -140,6 +147,26 @@ function Modal({
                 onChange={(e) => setForm((f) => ({ ...f, order: Number(e.target.value) }))}
                 className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-300"
               />
+            </div>
+          </div>
+          {/* 対象ペット */}
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">対象ペット</label>
+            <div className="flex gap-2">
+              {PET_TYPE_OPTIONS.map(({ v, label, color }) => (
+                <button
+                  key={String(v)}
+                  type="button"
+                  onClick={() => setForm((f) => ({ ...f, targetPetType: v }))}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                    form.targetPetType === v
+                      ? `${color} text-white border-transparent`
+                      : 'bg-white text-gray-500 border-gray-200 hover:border-gray-400'
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
           {/* 対象年齢 */}
@@ -329,6 +356,12 @@ export default function RecommendationsPage() {
                   <p className="text-sm font-medium text-gray-800 truncate leading-tight">{item.title}</p>
                   {item.category && (
                     <span className="text-[10px] px-1.5 py-0.5 bg-orange-50 text-orange-400 rounded-full flex-shrink-0 border border-orange-100">{item.category}</span>
+                  )}
+                  {item.targetPetType === 'dog' && (
+                    <span className="text-[10px] px-1.5 py-0.5 bg-orange-100 text-orange-600 rounded-full flex-shrink-0">🐶 犬</span>
+                  )}
+                  {item.targetPetType === 'cat' && (
+                    <span className="text-[10px] px-1.5 py-0.5 bg-purple-100 text-purple-600 rounded-full flex-shrink-0">🐱 猫</span>
                   )}
                 </div>
                 {item.description && (
