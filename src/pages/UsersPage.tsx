@@ -13,6 +13,7 @@ interface Owner {
   friendId?: string
   isDisabled?: boolean
   createdAt?: { toDate: () => Date }
+  lastOpenedAt?: { toDate: () => Date }
 }
 
 interface DogSummary {
@@ -275,6 +276,7 @@ export default function UsersPage() {
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">総pt</th>
                 <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">週pt</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">登録日</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">最終起動</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">状態</th>
                 <th className="px-4 py-3 text-xs font-medium text-gray-500 text-right">操作</th>
               </tr>
@@ -309,6 +311,9 @@ export default function UsersPage() {
                     <td className="px-4 py-3 text-right text-gray-600 text-sm">{owner.weeklyPoints ?? 0}</td>
                     <td className="px-4 py-3 text-gray-500 text-xs">
                       {date ? date.toLocaleDateString('ja-JP') : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">
+                      {owner.lastOpenedAt ? owner.lastOpenedAt.toDate().toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
                     </td>
                     <td className="px-4 py-3">
                       {owner.isDisabled ? (
@@ -358,7 +363,7 @@ export default function UsersPage() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="text-center py-12 text-gray-400 text-sm">該当するユーザーがいません</td>
+                  <td colSpan={8} className="text-center py-12 text-gray-400 text-sm">該当するユーザーがいません</td>
                 </tr>
               )}
             </tbody>
