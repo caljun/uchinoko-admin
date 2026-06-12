@@ -1,22 +1,29 @@
+import { useEffect, useState } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { collection, onSnapshot, query, where } from 'firebase/firestore'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import LoginPage from './pages/LoginPage'
 import UsersPage from './pages/UsersPage'
-import RecommendationsPage from './pages/RecommendationsPage'
-import PhotosPage from './pages/PhotosPage'
 import ReportsPage from './pages/ReportsPage'
-import { Users, Gift, Image, LogOut, Flag } from 'lucide-react'
+import PostsPage from './pages/PostsPage'
+import { db } from './lib/firebase'
+import { Users, LogOut, Flag, Grid3X3 } from 'lucide-react'
 
 function Layout() {
   const { signOut } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const [openReportCount, setOpenReportCount] = useState(0)
+
+  useEffect(() => {
+    const reportsQuery = query(collection(db, 'reports'), where('status', '==', 'open'))
+    return onSnapshot(reportsQuery, (snap) => setOpenReportCount(snap.size), () => setOpenReportCount(0))
+  }, [])
 
   const navItems = [
     { path: '/', label: 'ユーザー管理', icon: Users },
     { path: '/reports', label: '通報管理', icon: Flag },
-    { path: '/recommendations', label: 'おすすめ商品', icon: Gift },
-    { path: '/photos', label: '写真モデレーション', icon: Image },
+    { path: '/posts', label: '投稿管理', icon: Grid3X3 },
   ]
 
   return (
@@ -39,7 +46,12 @@ function Layout() {
               }`}
             >
               <Icon size={16} />
-              {label}
+              <span className="flex-1 text-left">{label}</span>
+              {path === '/reports' && openReportCount > 0 && (
+                <span className="min-w-5 h-5 px-1 rounded-full bg-red-500 text-white text-[11px] font-bold flex items-center justify-center">
+                  {openReportCount}
+                </span>
+              )}
             </button>
           ))}
         </nav>
@@ -80,8 +92,7 @@ function AppRoutes() {
       <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
         <Route path="/" element={<UsersPage />} />
         <Route path="/reports" element={<ReportsPage />} />
-        <Route path="/recommendations" element={<RecommendationsPage />} />
-        <Route path="/photos" element={<PhotosPage />} />
+        <Route path="/posts" element={<PostsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>

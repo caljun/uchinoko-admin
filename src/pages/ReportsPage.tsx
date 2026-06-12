@@ -9,6 +9,7 @@ import {
   query,
   updateDoc,
 } from 'firebase/firestore'
+import { getFunctions, httpsCallable } from 'firebase/functions'
 import { AlertTriangle, CheckCircle, ExternalLink, Flag, RefreshCw, Trash2 } from 'lucide-react'
 import { db } from '../lib/firebase'
 
@@ -45,6 +46,9 @@ const reasonLabels: Record<string, string> = {
   inappropriate: '不適切な内容',
   spam: 'スパム・迷惑行為',
 }
+
+const functions = getFunctions(undefined, 'us-central1')
+const callDeletePost = httpsCallable(functions, 'adminDeletePost')
 
 export default function ReportsPage() {
   const [reports, setReports] = useState<ReportItem[]>([])
@@ -133,7 +137,7 @@ export default function ReportsPage() {
         if (!report.commentId) throw new Error('commentId is missing')
         await deleteDoc(doc(db, 'posts', report.postId, 'comments', report.commentId))
       } else {
-        await deleteDoc(doc(db, 'posts', report.postId))
+        await callDeletePost({ postId: report.postId })
       }
       await updateDoc(doc(db, 'reports', report.id), {
         status: 'resolved',

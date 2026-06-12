@@ -1,35 +1,26 @@
 import { useEffect, useState } from 'react'
 import { collection, collectionGroup, getDocs, orderBy, query } from 'firebase/firestore'
 import { getFunctions, httpsCallable } from 'firebase/functions'
+import { AlertTriangle, Ban, CheckCircle, Search, Trash2 } from 'lucide-react'
 import { db } from '../lib/firebase'
-import { Search, Ban, Trash2, CheckCircle, AlertTriangle, X, PawPrint } from 'lucide-react'
 
 interface Owner {
   id: string
-  email: string
+  email?: string
   displayName?: string
-  totalPoints: number
-  weeklyPoints: number
-  friendId?: string
+  name?: string
   isDisabled?: boolean
   createdAt?: { toDate: () => Date }
-  lastOpenedAt?: { toDate: () => Date }
-}
-
-interface DogSummary {
-  id: string
-  name: string
-  breed: string
-  gender: string
-  photoUrl?: string
-  totalPoints: number
-  weeklyPoints: number
 }
 
 const functions = getFunctions(undefined, 'us-central1')
 const callDisable = httpsCallable(functions, 'adminDisableUser')
 const callEnable = httpsCallable(functions, 'adminEnableUser')
 const callDelete = httpsCallable(functions, 'adminDeleteUser')
+
+function displayName(owner: Owner) {
+  return owner.displayName || owner.name || '名前なし'
+}
 
 function DeleteModal({ owner, onConfirm, onCancel }: {
   owner: Owner
@@ -38,7 +29,7 @@ function DeleteModal({ owner, onConfirm, onCancel }: {
 }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl p-6" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-white rounded-2xl w-full max-w-sm shadow-xl p-6">
         <div className="flex items-center gap-3 mb-4">
           <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
             <AlertTriangle size={18} className="text-red-500" />
@@ -49,11 +40,11 @@ function DeleteModal({ owner, onConfirm, onCancel }: {
           </div>
         </div>
         <div className="bg-gray-50 rounded-xl px-4 py-3 mb-4">
-          <p className="text-sm font-medium text-gray-800">{owner.displayName ?? '名前なし'}</p>
-          <p className="text-xs text-gray-400 mt-0.5">{owner.email}</p>
+          <p className="text-sm font-medium text-gray-800">{displayName(owner)}</p>
+          <p className="text-xs text-gray-400 mt-0.5">{owner.email || owner.id}</p>
         </div>
         <p className="text-xs text-gray-500 mb-5">
-          Auth アカウント・Firestore ドキュメント・犬のデータ・日記・健康記録をすべて削除します。
+          Auth アカウント、犬、投稿、フォロー情報を削除します。
         </p>
         <div className="flex gap-3">
           <button onClick={onCancel} className="flex-1 py-2.5 border border-gray-200 rounded-xl text-sm text-gray-600 hover:bg-gray-50">
@@ -68,111 +59,17 @@ function DeleteModal({ owner, onConfirm, onCancel }: {
   )
 }
 
-function DogsModal({ owner, dogs, onClose }: {
-  owner: Owner
-  dogs: DogSummary[]
-  onClose: () => void
-}) {
-  return (
-    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden" onClick={(e) => e.stopPropagation()}>
-        {/* ヘッダー */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
-          <div>
-            <h3 className="font-bold text-gray-800">{owner.displayName ?? '名前なし'}</h3>
-            <p className="text-xs text-gray-400 mt-0.5">{dogs.length}頭登録</p>
-          </div>
-          <button onClick={onClose} className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 transition-colors">
-            <X size={14} className="text-gray-500" />
-          </button>
-        </div>
-        {/* 犬一覧 */}
-        <div className="p-4 space-y-3 max-h-[70vh] overflow-y-auto">
-          {dogs.length === 0 ? (
-            <div className="text-center py-10 text-gray-400 text-sm">
-              <PawPrint size={28} className="mx-auto mb-2 opacity-30" />
-              登録された犬がいません
-            </div>
-          ) : (
-            dogs.map((dog) => (
-              <div key={dog.id} className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
-                {/* 写真 */}
-                <div className="w-14 h-14 rounded-xl overflow-hidden bg-orange-100 flex-shrink-0 flex items-center justify-center">
-                  {dog.photoUrl ? (
-                    <img src={dog.photoUrl} alt={dog.name} className="w-full h-full object-cover" />
-                  ) : (
-                    <PawPrint size={20} className="text-orange-300" />
-                  )}
-                </div>
-                {/* 情報 */}
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-gray-800 text-sm">{dog.name}</p>
-                  <p className="text-xs text-gray-400 mt-0.5">{dog.breed} · {dog.gender === 'male' ? '♂' : '♀'}</p>
-                </div>
-                {/* ポイント */}
-                <div className="text-right flex-shrink-0">
-                  <p className="text-sm font-bold text-orange-500">{dog.totalPoints.toLocaleString()} pt</p>
-                  <p className="text-xs text-gray-400">週 {dog.weeklyPoints.toLocaleString()}</p>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function UsersPage() {
   const [owners, setOwners] = useState<Owner[]>([])
-  const [dogsMap, setDogsMap] = useState<Record<string, DogSummary[]>>({})
+  const [dogCounts, setDogCounts] = useState<Record<string, number>>({})
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<Owner | null>(null)
-  const [dogsTarget, setDogsTarget] = useState<Owner | null>(null)
   const [toast, setToast] = useState<{ msg: string; type: 'ok' | 'err' } | null>(null)
 
   useEffect(() => {
-    Promise.all([
-      getDocs(query(collection(db, 'owners'), orderBy('createdAt', 'desc'))),
-      getDocs(collectionGroup(db, 'dogs')),
-    ]).then(([ownersSnap, dogsSnap]) => {
-      const pointsMap: Record<string, { total: number; weekly: number }> = {}
-      const dogsMapTmp: Record<string, DogSummary[]> = {}
-
-      dogsSnap.forEach((d) => {
-        if (!d.ref.path.startsWith('owners/')) return
-        const ownerUid = d.ref.path.split('/')[1]
-        const data = d.data()
-        const total = (data.totalPoints as number) ?? 0
-        const weekly = (data.weeklyPoints as number) ?? 0
-
-        if (!pointsMap[ownerUid]) pointsMap[ownerUid] = { total: 0, weekly: 0 }
-        pointsMap[ownerUid].total += total
-        pointsMap[ownerUid].weekly += weekly
-
-        if (!dogsMapTmp[ownerUid]) dogsMapTmp[ownerUid] = []
-        dogsMapTmp[ownerUid].push({
-          id: d.id,
-          name: data.name ?? '名前なし',
-          breed: data.breed ?? '不明',
-          gender: data.gender ?? 'male',
-          photoUrl: data.photoUrl,
-          totalPoints: total,
-          weeklyPoints: weekly,
-        })
-      })
-
-      setDogsMap(dogsMapTmp)
-      setOwners(ownersSnap.docs.map((d) => ({
-        id: d.id,
-        ...d.data(),
-        totalPoints: pointsMap[d.id]?.total ?? 0,
-        weeklyPoints: pointsMap[d.id]?.weekly ?? 0,
-      } as Owner)))
-      setLoading(false)
-    }).catch(() => setLoading(false))
+    loadUsers()
   }, [])
 
   const showToast = (msg: string, type: 'ok' | 'err') => {
@@ -180,20 +77,47 @@ export default function UsersPage() {
     setTimeout(() => setToast(null), 3000)
   }
 
+  const loadUsers = async () => {
+    setLoading(true)
+    try {
+      const [ownersSnap, dogsSnap] = await Promise.all([
+        getDocs(query(collection(db, 'owners'), orderBy('createdAt', 'desc'))),
+        getDocs(collectionGroup(db, 'dogs')),
+      ])
+
+      const counts: Record<string, number> = {}
+      dogsSnap.forEach((dogDoc) => {
+        if (!dogDoc.ref.path.startsWith('owners/')) return
+        const ownerUid = dogDoc.ref.path.split('/')[1]
+        counts[ownerUid] = (counts[ownerUid] ?? 0) + 1
+      })
+
+      setDogCounts(counts)
+      setOwners(ownersSnap.docs.map((docSnap) => ({
+        id: docSnap.id,
+        ...docSnap.data(),
+      } as Owner)))
+    } catch {
+      showToast('ユーザーの読み込みに失敗しました', 'err')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const toggleDisable = async (owner: Owner) => {
     setActionLoading(owner.id)
     try {
       if (owner.isDisabled) {
         await callEnable({ uid: owner.id })
-        setOwners((prev) => prev.map((o) => o.id === owner.id ? { ...o, isDisabled: false } : o))
+        setOwners((prev) => prev.map((item) => item.id === owner.id ? { ...item, isDisabled: false } : item))
         showToast('凍結を解除しました', 'ok')
       } else {
         await callDisable({ uid: owner.id })
-        setOwners((prev) => prev.map((o) => o.id === owner.id ? { ...o, isDisabled: true } : o))
+        setOwners((prev) => prev.map((item) => item.id === owner.id ? { ...item, isDisabled: true } : item))
         showToast('アカウントを凍結しました', 'ok')
       }
     } catch {
-      showToast('エラーが発生しました', 'err')
+      showToast('操作に失敗しました', 'err')
     } finally {
       setActionLoading(null)
     }
@@ -206,7 +130,7 @@ export default function UsersPage() {
     setActionLoading(target.id)
     try {
       await callDelete({ uid: target.id })
-      setOwners((prev) => prev.filter((o) => o.id !== target.id))
+      setOwners((prev) => prev.filter((item) => item.id !== target.id))
       showToast('ユーザーを削除しました', 'ok')
     } catch {
       showToast('削除に失敗しました', 'err')
@@ -215,21 +139,18 @@ export default function UsersPage() {
     }
   }
 
-  const filtered = owners.filter((o) => {
-    const q = search.toLowerCase()
+  const filtered = owners.filter((owner) => {
+    const q = search.trim().toLowerCase()
+    if (!q) return true
     return (
-      (o.displayName ?? '').toLowerCase().includes(q) ||
-      o.email.toLowerCase().includes(q) ||
-      (o.friendId ?? '').toLowerCase().includes(q)
+      displayName(owner).toLowerCase().includes(q) ||
+      (owner.email ?? '').toLowerCase().includes(q) ||
+      owner.id.toLowerCase().includes(q)
     )
   })
 
-  const activeCount = owners.filter((o) => !o.isDisabled).length
-  const disabledCount = owners.filter((o) => o.isDisabled).length
-
   return (
-    <div className="p-6 max-w-5xl">
-      {/* ヘッダー */}
+    <div className="p-6 max-w-6xl">
       <div className="flex items-center justify-between mb-5">
         <div>
           <h2 className="text-xl font-bold text-gray-800">ユーザー管理</h2>
@@ -239,30 +160,12 @@ export default function UsersPage() {
           <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="名前・メール・IDで検索"
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="名前・メールで検索"
             className="pl-8 pr-4 py-2 text-xs border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-orange-300 w-56"
           />
         </div>
       </div>
-
-      {/* サマリー */}
-      {owners.length > 0 && (
-        <div className="grid grid-cols-3 gap-3 mb-5">
-          <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
-            <p className="text-xs text-gray-400">総ユーザー数</p>
-            <p className="text-2xl font-bold text-gray-800 mt-0.5">{owners.length}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
-            <p className="text-xs text-gray-400">アクティブ</p>
-            <p className="text-2xl font-bold text-green-600 mt-0.5">{activeCount}</p>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-100 px-4 py-3">
-            <p className="text-xs text-gray-400">凍結中</p>
-            <p className="text-2xl font-bold text-red-500 mt-0.5">{disabledCount}</p>
-          </div>
-        </div>
-      )}
 
       {loading ? (
         <div className="flex items-center justify-center py-20 text-gray-400 text-sm">読み込み中...</div>
@@ -271,50 +174,24 @@ export default function UsersPage() {
           <table className="w-full text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">ユーザー</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">フレンドID</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">総pt</th>
-                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">週pt</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">名前</th>
+                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">メールアドレス</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">登録日</th>
-                <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">最終起動</th>
+                <th className="text-right px-4 py-3 text-xs font-medium text-gray-500">登録犬数</th>
                 <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">状態</th>
                 <th className="px-4 py-3 text-xs font-medium text-gray-500 text-right">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
               {filtered.map((owner) => {
-                const date = owner.createdAt?.toDate()
                 const isActing = actionLoading === owner.id
-                const dogCount = dogsMap[owner.id]?.length ?? 0
+                const createdAt = owner.createdAt?.toDate()
                 return (
                   <tr key={owner.id} className={`${owner.isDisabled ? 'bg-red-50/40' : 'hover:bg-gray-50/50'} transition-colors`}>
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => setDogsTarget(owner)}
-                        className="text-left hover:text-orange-600 transition-colors group"
-                      >
-                        <p className="font-medium text-gray-800 text-sm group-hover:text-orange-600">{owner.displayName ?? '—'}</p>
-                        <p className="text-xs text-gray-400">{owner.email}</p>
-                      </button>
-                      {dogCount > 0 && (
-                        <button
-                          onClick={() => setDogsTarget(owner)}
-                          className="flex items-center gap-1 mt-1 text-[10px] text-orange-400 hover:text-orange-600 transition-colors"
-                        >
-                          <PawPrint size={9} />
-                          {dogCount}頭
-                        </button>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 font-mono text-xs">{owner.friendId ?? '—'}</td>
-                    <td className="px-4 py-3 text-right font-semibold text-orange-500 text-sm">{owner.totalPoints ?? 0}</td>
-                    <td className="px-4 py-3 text-right text-gray-600 text-sm">{owner.weeklyPoints ?? 0}</td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">
-                      {date ? date.toLocaleDateString('ja-JP') : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">
-                      {owner.lastOpenedAt ? owner.lastOpenedAt.toDate().toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
-                    </td>
+                    <td className="px-4 py-3 font-medium text-gray-800">{displayName(owner)}</td>
+                    <td className="px-4 py-3 text-gray-500">{owner.email || '-'}</td>
+                    <td className="px-4 py-3 text-gray-500 text-xs">{createdAt ? createdAt.toLocaleDateString('ja-JP') : '-'}</td>
+                    <td className="px-4 py-3 text-right font-semibold text-gray-700">{dogCounts[owner.id] ?? 0}</td>
                     <td className="px-4 py-3">
                       {owner.isDisabled ? (
                         <span className="inline-flex items-center gap-1 text-xs px-2 py-1 bg-red-100 text-red-600 rounded-full font-medium">
@@ -339,13 +216,7 @@ export default function UsersPage() {
                               : 'bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-200'
                           }`}
                         >
-                          {isActing ? (
-                            <span className="w-3 h-3 border border-current border-t-transparent rounded-full animate-spin" />
-                          ) : owner.isDisabled ? (
-                            <CheckCircle size={12} />
-                          ) : (
-                            <Ban size={12} />
-                          )}
+                          {owner.isDisabled ? <CheckCircle size={12} /> : <Ban size={12} />}
                           {owner.isDisabled ? '解除' : '凍結'}
                         </button>
                         <button
@@ -363,7 +234,7 @@ export default function UsersPage() {
               })}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-center py-12 text-gray-400 text-sm">該当するユーザーがいません</td>
+                  <td colSpan={6} className="text-center py-12 text-gray-400 text-sm">該当するユーザーがいません</td>
                 </tr>
               )}
             </tbody>
@@ -371,16 +242,6 @@ export default function UsersPage() {
         </div>
       )}
 
-      {/* 犬一覧モーダル */}
-      {dogsTarget && (
-        <DogsModal
-          owner={dogsTarget}
-          dogs={dogsMap[dogsTarget.id] ?? []}
-          onClose={() => setDogsTarget(null)}
-        />
-      )}
-
-      {/* 削除確認モーダル */}
       {deleteTarget && (
         <DeleteModal
           owner={deleteTarget}
@@ -389,9 +250,8 @@ export default function UsersPage() {
         />
       )}
 
-      {/* トースト */}
       {toast && (
-        <div className={`fixed bottom-6 right-6 px-4 py-3 rounded-xl text-sm font-medium shadow-lg transition-all ${
+        <div className={`fixed bottom-6 right-6 px-4 py-3 rounded-xl text-sm font-medium shadow-lg ${
           toast.type === 'ok' ? 'bg-gray-800 text-white' : 'bg-red-500 text-white'
         }`}>
           {toast.msg}
