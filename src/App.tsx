@@ -4,7 +4,8 @@ import LoginPage from './pages/LoginPage'
 import UsersPage from './pages/UsersPage'
 import RecommendationsPage from './pages/RecommendationsPage'
 import PhotosPage from './pages/PhotosPage'
-import { Users, Gift, Image, LogOut } from 'lucide-react'
+import ReportsPage from './pages/ReportsPage'
+import { Users, Gift, Image, LogOut, Flag } from 'lucide-react'
 
 function Layout() {
   const { signOut } = useAuth()
@@ -13,6 +14,7 @@ function Layout() {
 
   const navItems = [
     { path: '/', label: 'ユーザー管理', icon: Users },
+    { path: '/reports', label: '通報管理', icon: Flag },
     { path: '/recommendations', label: 'おすすめ商品', icon: Gift },
     { path: '/photos', label: '写真モデレーション', icon: Image },
   ]
@@ -77,6 +79,7 @@ function AppRoutes() {
       <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
       <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
         <Route path="/" element={<UsersPage />} />
+        <Route path="/reports" element={<ReportsPage />} />
         <Route path="/recommendations" element={<RecommendationsPage />} />
         <Route path="/photos" element={<PhotosPage />} />
       </Route>
