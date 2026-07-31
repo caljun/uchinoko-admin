@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
-import { collection, getDocs, limit, orderBy, query, type Timestamp } from 'firebase/firestore'
+import { collection, doc, getDoc, getDocs, limit, orderBy, query, type Timestamp } from 'firebase/firestore'
 import { getFunctions, httpsCallable } from 'firebase/functions'
-import { AlertTriangle, CheckCircle, RefreshCw, Trash2, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle, Download, RefreshCw, Trash2, X } from 'lucide-react'
 import { db } from '../lib/firebase'
 
 interface FeedPost {
@@ -9,6 +9,8 @@ interface FeedPost {
   ownerId: string
   dogId?: string
   dogName?: string
+  dogBreed?: string
+  dogBreedSize?: number
   ownerDisplayName?: string
   imageUrl: string
   caption?: string
@@ -30,11 +32,155 @@ function dateText(postedAt?: Timestamp) {
   }) ?? '-'
 }
 
-function PostModal({ post, deleting, onClose, onDelete }: {
+function ageParts(birthDate: Date) {
+  const now = new Date()
+  let years = now.getFullYear() - birthDate.getFullYear()
+  let months = now.getMonth() - birthDate.getMonth()
+  if (now.getDate() < birthDate.getDate()) months -= 1
+  if (months < 0) {
+    years -= 1
+    months += 12
+  }
+  return { years: Math.max(0, years), months: Math.max(0, months) }
+}
+
+function ageDisplayText(birthDate?: Timestamp, breedSize = 1) {
+  if (!birthDate) return ''
+  const date = birthDate.toDate()
+  const { years, months } = ageParts(date)
+  let actualAge = ''
+  if (years > 0) {
+    actualAge = `${years}歳`
+  } else if (months > 0) {
+    actualAge = `${months}ヶ月`
+  } else {
+    const days = Math.max(0, Math.floor((Date.now() - date.getTime()) / 86_400_000))
+    actualAge = days > 0 ? `${days}日` : ''
+  }
+  if (!actualAge) return ''
+
+  let humanAge: number
+  if (years === 0) {
+    humanAge = breedSize === 2 ? Math.max(1, months) : Math.max(1, Math.floor(months * 1.25))
+  } else if (breedSize === 0) {
+    humanAge = years === 1 ? 15 : years === 2 ? 24 : 24 + (years - 2) * 4
+  } else if (breedSize === 2) {
+    humanAge = years === 1 ? 12 : years === 2 ? 22 : 22 + (years - 2) * 6
+  } else {
+    humanAge = years === 1 ? 15 : years === 2 ? 24 : 24 + (years - 2) * 5
+  }
+  return `${actualAge}（${humanAge}歳）`
+}
+
+function loadImage(url: string) {
+  return new Promise<HTMLImageElement>((resolve, reject) => {
+    const image = new Image()
+    image.crossOrigin = 'anonymous'
+    image.onload = () => resolve(image)
+    image.onerror = () => reject(new Error('画像を取得できませんでした'))
+    image.src = url
+  })
+}
+
+function fittedFontSize(
+  context: CanvasRenderingContext2D,
+  text: string,
+  baseSize: number,
+  weight: number,
+  maxWidth: number,
+) {
+  context.font = `${weight} ${baseSize}px -apple-system, BlinkMacSystemFont, sans-serif`
+  const measuredWidth = context.measureText(text).width
+  if (measuredWidth <= maxWidth) return baseSize
+  return Math.max(baseSize * 0.65, baseSize * maxWidth / measuredWidth)
+}
+
+async function downloadBrandedPost(post: FeedPost) {
+  let breed = post.dogBreed ?? ''
+  let breedSize = post.dogBreedSize ?? 1
+  let age = ''
+
+  if (post.ownerId && post.dogId) {
+    const dogSnap = await getDoc(doc(db, 'owners', post.ownerId, 'dogs', post.dogId))
+    if (dogSnap.exists()) {
+      const dog = dogSnap.data()
+      breed = typeof dog.breed === 'string' ? dog.breed : breed
+      breedSize = typeof dog.breedSize === 'number' ? dog.breedSize : breedSize
+      age = ageDisplayText(dog.birthDate as Timestamp | undefined, breedSize)
+    }
+  }
+
+  const image = await loadImage(post.imageUrl)
+  const width = image.naturalWidth
+  const height = image.naturalHeight
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const context = canvas.getContext('2d')
+  if (!context) throw new Error('画像を作成できませんでした')
+  context.drawImage(image, 0, 0, width, height)
+
+  const logoFontSize = Math.max(width * 0.045, 28)
+  const baseNameFontSize = Math.max(width * 0.06, 38)
+  const baseDetailFontSize = Math.max(width * 0.041, 26)
+  const bottomPadding = Math.max(height * 0.025, 22)
+  const horizontalPadding = Math.max(width * 0.04, 24)
+  const availableTextWidth = width - horizontalPadding * 2
+  const detailText = [age, breed].filter(Boolean).join('・')
+  const name = post.dogName || 'うちの子'
+  const nameFontSize = fittedFontSize(context, name, baseNameFontSize, 700, availableTextWidth)
+  const detailFontSize = fittedFontSize(context, detailText, baseDetailFontSize, 600, availableTextWidth)
+
+  const gradientHeight = Math.max(
+    nameFontSize + detailFontSize + bottomPadding * 2.5,
+    height * 0.16,
+  )
+  const gradient = context.createLinearGradient(0, height - gradientHeight, 0, height)
+  gradient.addColorStop(0, 'rgba(0,0,0,0)')
+  gradient.addColorStop(1, 'rgba(0,0,0,0.42)')
+  context.fillStyle = gradient
+  context.fillRect(0, height - gradientHeight, width, gradientHeight)
+
+  const infoLift = Math.max(height * 0.025, 24)
+  const detailY = height - bottomPadding - logoFontSize * 1.35 - detailFontSize * 1.25 - infoLift
+  context.textBaseline = 'top'
+  context.shadowColor = 'rgba(0,0,0,0.7)'
+  context.shadowBlur = Math.max(width * 0.006, 3)
+  context.shadowOffsetY = 1
+
+  context.fillStyle = '#fff'
+  context.font = `700 ${nameFontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
+  context.fillText(name, horizontalPadding, detailText ? detailY - nameFontSize * 1.2 : detailY - nameFontSize * 0.2)
+
+  if (detailText) {
+    context.fillStyle = 'rgba(255,255,255,0.9)'
+    context.font = `600 ${detailFontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
+    context.fillText(detailText, horizontalPadding, detailY)
+  }
+
+  context.fillStyle = 'rgba(255,255,255,0.96)'
+  context.font = `700 ${logoFontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
+  context.textAlign = 'center'
+  context.fillText('PetReal.', width / 2, height - bottomPadding - logoFontSize * 1.25)
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((value) => value ? resolve(value) : reject(new Error('JPEGを作成できませんでした')), 'image/jpeg', 0.92)
+  })
+  const downloadURL = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = downloadURL
+  anchor.download = `PetReal-${name}-${post.id}.jpg`
+  anchor.click()
+  URL.revokeObjectURL(downloadURL)
+}
+
+function PostModal({ post, deleting, downloading, onClose, onDelete, onDownload }: {
   post: FeedPost
   deleting: boolean
+  downloading: boolean
   onClose: () => void
   onDelete: () => void
+  onDownload: () => void
 }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-5" onClick={onClose}>
@@ -85,14 +231,24 @@ function PostModal({ post, deleting, onClose, onDelete }: {
               </div>
             </div>
 
-            <button
-              onClick={onDelete}
-              disabled={deleting}
-              className="mt-6 flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 disabled:opacity-40"
-            >
-              <Trash2 size={15} />
-              {deleting ? '削除中...' : '投稿を削除'}
-            </button>
+            <div className="mt-6 space-y-2">
+              <button
+                onClick={onDownload}
+                disabled={downloading || deleting}
+                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-orange-500 text-white text-sm font-semibold hover:bg-orange-600 disabled:opacity-40"
+              >
+                <Download size={15} />
+                {downloading ? '画像を作成中...' : 'ロゴ入り画像を保存'}
+              </button>
+              <button
+                onClick={onDelete}
+                disabled={deleting || downloading}
+                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-red-500 text-white text-sm font-semibold hover:bg-red-600 disabled:opacity-40"
+              >
+                <Trash2 size={15} />
+                {deleting ? '削除中...' : '投稿を削除'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -146,6 +302,18 @@ export default function PostsPage() {
     }
   }
 
+  const saveBrandedImage = async (post: FeedPost) => {
+    setActionLoading(`download:${post.id}`)
+    try {
+      await downloadBrandedPost(post)
+      showToast('ロゴ入り画像を保存しました', 'ok')
+    } catch {
+      showToast('画像の保存に失敗しました', 'err')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
   return (
     <div className="p-6 max-w-7xl">
       <div className="flex items-center justify-between mb-5">
@@ -189,8 +357,10 @@ export default function PostsPage() {
         <PostModal
           post={selectedPost}
           deleting={actionLoading === selectedPost.id}
+          downloading={actionLoading === `download:${selectedPost.id}`}
           onClose={() => setSelectedPost(null)}
           onDelete={() => setDeleteTarget(selectedPost)}
+          onDownload={() => saveBrandedImage(selectedPost)}
         />
       )}
 
