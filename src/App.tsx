@@ -34,7 +34,7 @@ function Layout() {
       <div className="w-56 bg-white border-r border-gray-200 flex flex-col flex-shrink-0">
         <div className="px-5 py-4 border-b border-gray-100">
           <p className="text-xs text-gray-400 font-medium tracking-widest uppercase">Admin</p>
-          <h1 className="text-base font-bold text-gray-800 mt-0.5">ウチの子</h1>
+          <h1 className="text-base font-bold text-gray-800 mt-0.5">PetReal.</h1>
         </div>
         <nav className="flex-1 p-3 space-y-1">
           {navItems.map(({ path, label, icon: Icon }) => (
