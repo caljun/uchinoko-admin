@@ -7,9 +7,8 @@ import UsersPage from './pages/UsersPage'
 import ReportsPage from './pages/ReportsPage'
 import PostsPage from './pages/PostsPage'
 import AnalyticsPage from './pages/AnalyticsPage'
-import GrowthPage from './pages/GrowthPage'
 import { db } from './lib/firebase'
-import { Users, LogOut, Flag, Grid3X3, BarChart3, TrendingUp } from 'lucide-react'
+import { Users, LogOut, Flag, Grid3X3, BarChart3 } from 'lucide-react'
 
 function Layout() {
   const { signOut } = useAuth()
@@ -26,8 +25,7 @@ function Layout() {
     { path: '/', label: 'ユーザー管理', icon: Users },
     { path: '/reports', label: '通報管理', icon: Flag },
     { path: '/posts', label: '投稿管理', icon: Grid3X3 },
-    { path: '/growth', label: '成長', icon: TrendingUp },
-    { path: '/analytics', label: '利用状況', icon: BarChart3 },
+    { path: '/analytics', label: '分析', icon: BarChart3 },
   ]
 
   return (
@@ -97,7 +95,6 @@ function AppRoutes() {
         <Route path="/" element={<UsersPage />} />
         <Route path="/reports" element={<ReportsPage />} />
         <Route path="/posts" element={<PostsPage />} />
-        <Route path="/growth" element={<GrowthPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />
